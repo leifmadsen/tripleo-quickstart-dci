@@ -7,94 +7,10 @@
           - "lookup('env', 'DCI_CLIENT_ID')"
           - "lookup('env', 'DCI_API_SECRET')"
         msg: "DCI_CLIENT_ID and DCI_API_SECRET must be defined"
-    - os_security_group:
-        state: present
-        name: ssh
-    - os_security_group_rule:
-        protocol: tcp
-        security_group: ssh
-        port_range_min: 22
-        port_range_max: 22
-        remote_ip_prefix: 0.0.0.0/0
-    - os_security_group:
-        state: present
-        name: http_in_tenant
-    - os_security_group_rule:
-        protocol: tcp
-        security_group: http_in_tenant
-        port_range_min: 80
-        port_range_max: 80
-        remote_group: http_in_tenant
-    - name: launch the jumpbox
-      os_server:
-        state: present
-        name: jumpbox
-        image: RHEL 7.3-35
-        key_name: "{{ lookup('env', 'USER')}}"
-        timeout: 200
-        flavor: m1.small
-        floating_ips:
-          - '{{ hostvars.jumpbox.ansible_ssh_host }}'
-        volume_size: 20
-        security_groups: ['ssh', 'http_in_tenant']
-        network: private
-    - name: create the DCI volume
-      os_volume:
-        state: present
-        size: 50
-        display_name: dci-data
-    - name: attach volume to jumpbox
-      os_server_volume:
-        state: present
-        server: jumpbox
-        volume: dci-data
-        device: /dev/vdb
-
-- name: fetch tripleo-environment
-  hosts: localhost
-  tasks:
-    - name: Cloning the repository
-      git:
-        repo: ssh://code.engineering.redhat.com:22/tripleo-environments.git
-        dest: /tmp/tripleo-environments
-        version: master
-
-- name: register the node on RHSM
-  hosts: os_node
-  tasks:
-    - name: unregister the node from the RHSM if it was
-      redhat_subscription:
-        state: absent
-      become: True
-    - name:  register the node on the RHSM
-      redhat_subscription:
-        state: present
-        username: '{{ rhsm_login }}'
-        password: '{{ rhsm_password }}'
-        pool_ids: ['{{ rhsm_pool_id }}']
-      become: True
-    - name : enable the required repositories
-      shell: |
-        subscription-manager repos --disable=* --enable=rhel-7-server-rpms --enable=rhel-7-server-optional-rpms --enable=rhel-7-server-extras-rpms --enable=rhel-7-server-cert-rpms
-      become: True
 
 - name: prepare the jumpbox
   hosts: jumpbox
   tasks:
-    - name: make a filesystem on /dev/vdb if there's none
-      filesystem:
-        fstype: xfs
-        dev: /dev/vdb
-        force: no
-      become: True
-    - name: restore the dci-ansible-agent home directory
-      mount:
-        path: /var/lib/dci-ansible-agent
-        src: /dev/vdb
-        fstype: xfs
-        opts: noatime
-        state: mounted
-      become: True
     - name: install some extra packages
       package:
         name: '{{ item }}'
@@ -131,15 +47,18 @@
 - name: configure dci-ansible-agent
   hosts: jumpbox
   tasks:
-    - name: Generating RSA keys for dci-ansible-agent
+    - name: Create users and generate SSH keys
       user:
-        name: 'dci-ansible-agent'
+        name: "{{ item }}"
         generate_ssh_key: 'yes'
       become: yes
-      become_user: dci-ansible-agent
+      with_items:
+        - cloud-user
+        - dci-ansible-agent
+
     - name: Create the user .ssh directory
       file:
-        path: '~{{ item }}/.ssh'
+        path: '/home/{{ item }}/.ssh'
         owner: '{{ item }}'
         group:  '{{ item }}'
         mode: '0700'
@@ -148,10 +67,11 @@
       with_items:
         - cloud-user
         - dci-ansible-agent
-    - name: Set the ~/.ssh/config file
+
+    - name: Set the $USER/.ssh/config file
       copy:
         src: ssh_config
-        dest: '~{{ item }}/.ssh/config'
+        dest: '/home/{{ item }}/.ssh/config'
         owner: '{{ item }}'
         group: '{{ item }}'
         mode: '0644'
@@ -159,11 +79,12 @@
       with_items:
         - cloud-user
         - dci-ansible-agent
+
     - name: Reuse dci-ansible-agent ssh key
       copy:
         remote_src: True
-        src: '~dci-ansible-agent/.ssh/{{ item.name }}'
-        dest: '~cloud-user/.ssh/{{ item.name }}'
+        src: '/home/dci-ansible-agent/.ssh/{{ item.name }}'
+        dest: '/home/cloud-user/.ssh/{{ item.name }}'
         mode: '{{ item.mode }}'
         owner: cloud-user
         group: cloud-user
@@ -171,8 +92,9 @@
       with_items:
         - { name: id_rsa, mode: '0600'}
         - { name: id_rsa.pub, mode: '0644'}
+
     - name: Ensure cloud-user can auth itself on localhost
-      shell: cat .ssh/id_rsa.pub >> ~/.ssh/authorized_keys
+      shell: cat .ssh/id_rsa.pub >> /home/cloud-user/.ssh/authorized_keys
       become: yes
       become_user: cloud-user
     - name: Fetch the current quickstart.sh
@@ -188,11 +110,6 @@
         group: cloud-user
         state: directory
       become: yes
-    - synchronize:
-        src: /tmp/tripleo-environments
-        dest: /var/lib/dci-ansible-agent/repos
-      become: yes
-      become_user: dci-ansible-agent
     - template:
         src: settings.j2
         dest: /etc/dci-ansible-agent/settings.yml
@@ -225,29 +142,9 @@
         dest: /home/cloud-user/openrc.sh
       become: yes
       become_user: cloud-user
-    - stat:
-        path: /var/lib/dci-ansible-agent/rhel-guest-image.x86_64.qcow2
-      register: rhel_image_state
-    - name: Upload of rhel-guest-image.qcow2
-      shell: curl http://download-node-02.eng.bos.redhat.com/brewroot/packages/rhel-guest-image/7.3/35/images/rhel-guest-image-7.3-35.x86_64.qcow2 |ssh cloud-user@{{ hostvars.jumpbox.ansible_ssh_host }} 'cat > /home/cloud-user/rhel-guest-image.x86_64.qcow2'
-      when: not rhel_image_state.stat.exists
-      delegate_to: localhost
-    - name: Save the image in dci-ansible-agent user home
-      copy:
-        remote_src: True
-        src: /home/cloud-user/rhel-guest-image.x86_64.qcow2
-        dest: /var/lib/dci-ansible-agent/rhel-guest-image.x86_64.qcow2
-      become: yes
-      when: not rhel_image_state.stat.exists
-    - name: Expose the image for the cluster nodes
-      copy:
-        remote_src: True
-        src: /var/lib/dci-ansible-agent/rhel-guest-image.x86_64.qcow2
-        dest: /var/www/html/rhel-guest-image.x86_64.qcow2
-      become: yes
     - copy:
         src: internal-requirements.txt
-        dest: ~/internal-requirements.txt
+        dest: /home/cloud-user/internal-requirements.txt
     - command: bash /home/cloud-user/quickstart.sh --install-deps
 
 - name: extra settings to make he environment more friendly
@@ -271,12 +168,12 @@
 - name: run tripleo-quickstart
   hosts: jumpbox
   tasks:
-    - name: start the dci-ansible-agent systemd unit
-      systemd:
-        name: dci-ansible-agent
-        state: started
-        no_block: yes
-      become: yes
-
+#    - name: start the dci-ansible-agent systemd unit
+#      systemd:
+#        name: dci-ansible-agent
+#        state: started
+#        no_block: yes
+#      become: yes
+#
     - debug:
         msg: "You can now connect to your jumpbox with: ssh cloud-user@{{ hostvars.jumpbox.ansible_ssh_host }}"
