@@ -1,28 +1,10 @@
+# vim: set tabstop=2 shiftwidth=2 ft=yaml expandtab:
 ---
 - shell: |
     set -o pipefail
-    . /home/cloud-user/openrc.sh
     cd /home/cloud-user
-    bash quickstart.sh --bootstrap --requirements /home/cloud-user/internal-requirements.txt --working-dir /home/cloud-user/.quickstart/ --tags all --config /home/cloud-user/.quickstart/config/general_config/ovb-minimal-pacemaker-public-bond.yml --environment /home/cloud-user/.quickstart/config/environments/rdocloud.yml --extra-vars cleanup_stacks_keypairs=true --playbook baremetal-full-deploy.yml --release rhos-baseos-undercloud-dci -e @/home/cloud-user/.quickstart/config/release/rhos-baseos-undercloud-dci.yml -e @/etc/dci-ansible-agent/settings.yml localhost 2>&1|tee /home/cloud-user/run.log
-  become: True
-  become_user: cloud-user
-- name: install Python shade module
-  command: easy_install shade
-  become: True
-- os_server_facts:
-    server: '*undercloud*'
-    cloud: local
-- set_fact: undercloud_ip='{{ openstack_servers[0]["interface_ip"] }}'
-- name: Add undercloud
-  add_host:
-    name: "undercloud"
-    groups: "undercloud"
-    ansible_fqdn: "{{ undercloud_ip }}"
-    ansible_user: "stack"
-    ansible_host: "{{ undercloud_ip }}"
-- name: Create stack@undercloud SSH key
-  user:
-    name: stack
-    state: present
-    generate_ssh_key: yes
-  delegate_to: undercloud
+    bash quickstart.sh --release pike --requirements /home/cloud-user/internal-requirements.txt --bootstrap --tags all --nodes /home/cloud-user/.quickstart/config/nodes/1ctlr_1comp.yml --working-dir /home/cloud-user/.quickstart --playbook dci-trigger.yml 127.0.0.2
+  become: true
+  become_user: root
+
+- import_playbook: /home/cloud-user/.quickstart/add_host.yml
