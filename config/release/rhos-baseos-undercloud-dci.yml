@@ -18,6 +18,7 @@ images:
       url: "{{ undercloud_image_url }}"
       type: qcow2
       md5sum: "0bfff47b55a9428c83d2235da9d470de  rhel-guest-image.x86_64.qcow2"
+      #md5sum: "55a581618199240c5d6ce332653c3e506cb05da863ad2e4a50d5e068e9790d88  rhel-guest-image.x86_64.qcow2"
     - name: overcloud-full
       url: "{{ overcloud_image_url }}"
       type: tar
