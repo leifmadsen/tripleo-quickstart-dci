@@ -50,7 +50,7 @@
     - name: Create users and generate SSH keys
       user:
         name: "{{ item }}"
-        generate_ssh_key: 'yes'
+        generate_ssh_key: yes
       become: yes
       with_items:
         - cloud-user
