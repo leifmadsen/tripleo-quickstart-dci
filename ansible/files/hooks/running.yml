@@ -2,9 +2,7 @@
 ---
 - shell: |
     set -o pipefail
-    cd /home/cloud-user
-    bash quickstart.sh --release pike --requirements /home/cloud-user/internal-requirements.txt --bootstrap --tags all --nodes /home/cloud-user/.quickstart/config/nodes/1ctlr_1comp.yml --working-dir /home/cloud-user/.quickstart --playbook dci-trigger.yml 127.0.0.2
-  become: true
-  become_user: root
+    cd /home/dci-ansible-agent
+    bash quickstart.sh --release newton --requirements /home/dci-ansible-agent/internal-requirements.txt --bootstrap --tags all --nodes /home/dci-ansible-agent/.quickstart/config/nodes/1ctlr_1comp.yml --working-dir /home/dci-ansible-agent/.quickstart --playbook dci-trigger.yml 127.0.0.2
 
-- import_playbook: /home/cloud-user/.quickstart/add_host.yml
+- include_tasks: /home/dci-ansible-agent/.quickstart/add_host.yml

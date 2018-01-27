@@ -53,7 +53,6 @@
         generate_ssh_key: yes
       become: yes
       with_items:
-        - cloud-user
         - dci-ansible-agent
 
     - name: Create the user .ssh directory
@@ -65,7 +64,6 @@
         state: directory
       become: yes
       with_items:
-        - cloud-user
         - dci-ansible-agent
 
     - name: Set the $USER/.ssh/config file
@@ -77,37 +75,23 @@
         mode: '0644'
       become: yes
       with_items:
-        - cloud-user
         - dci-ansible-agent
 
-    - name: Reuse dci-ansible-agent ssh key
-      copy:
-        remote_src: True
-        src: '/home/dci-ansible-agent/.ssh/{{ item.name }}'
-        dest: '/home/cloud-user/.ssh/{{ item.name }}'
-        mode: '{{ item.mode }}'
-        owner: cloud-user
-        group: cloud-user
+    - name: Ensure dci-ansible-agent can auth itself on localhost
+      shell: cat .ssh/id_rsa.pub >> /home/dci-ansible-agent/.ssh/authorized_keys
       become: yes
-      with_items:
-        - { name: id_rsa, mode: '0600'}
-        - { name: id_rsa.pub, mode: '0644'}
-
-    - name: Ensure cloud-user can auth itself on localhost
-      shell: cat .ssh/id_rsa.pub >> /home/cloud-user/.ssh/authorized_keys
-      become: yes
-      become_user: cloud-user
+      become_user: dci-ansible-agent
     - name: Fetch the current quickstart.sh
       get_url:
         url: https://raw.githubusercontent.com/openstack/tripleo-quickstart/master/quickstart.sh
-        dest: /home/cloud-user/quickstart.sh
+        dest: /home/dci-ansible-agent/quickstart.sh
         mode: 0644
       become: yes
-      become_user: cloud-user
+      become_user: dci-ansible-agent
     - file:
         name: /var/lib/dci-ansible-agent/repos
-        owner: cloud-user
-        group: cloud-user
+        owner: dci-ansible-agent
+        group: dci-ansible-agent
         state: directory
       become: yes
     - template:
@@ -139,13 +123,13 @@
       become: True
     - template:
         src: openrc.j2
-        dest: /home/cloud-user/openrc.sh
+        dest: /home/dci-ansible-agent/openrc.sh
       become: yes
-      become_user: cloud-user
+      become_user: dci-ansible-agent
     - copy:
         src: internal-requirements.txt
-        dest: /home/cloud-user/internal-requirements.txt
-    - command: bash /home/cloud-user/quickstart.sh --install-deps
+        dest: /home/dci-ansible-agent/internal-requirements.txt
+    - command: bash /home/dci-ansible-agent/quickstart.sh --install-deps
 
 - name: extra settings to make he environment more friendly
   hosts: jumpbox
@@ -158,9 +142,9 @@
     - name: Install the bash_history
       copy:
         src: bash_history
-        dest: /home/cloud-user/.bash_history
-        owner: cloud-user
-        group: cloud-user
+        dest: /home/dci-ansible-agent/.bash_history
+        owner: dci-ansible-agent
+        group: dci-ansible-agent
         mode: '0700'
       become: yes
 
@@ -176,4 +160,4 @@
 #      become: yes
 #
     - debug:
-        msg: "You can now connect to your jumpbox with: ssh cloud-user@{{ hostvars.jumpbox.ansible_ssh_host }}"
+        msg: "You can now connect to your jumpbox with: ssh dci-ansible-agent@{{ hostvars.jumpbox.ansible_ssh_host }}"
