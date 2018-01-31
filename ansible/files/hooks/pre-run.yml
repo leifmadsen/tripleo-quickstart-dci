@@ -1,1 +1,4 @@
 ---
+- file:
+    path: /home/dci-ansible-agent/.quickstart/
+    state: absent

@@ -3,6 +3,6 @@
 - shell: |
     set -o pipefail
     cd /home/dci-ansible-agent
-    bash quickstart.sh --release newton --requirements /home/dci-ansible-agent/internal-requirements.txt --bootstrap --tags all --nodes /home/dci-ansible-agent/.quickstart/config/nodes/1ctlr_1comp.yml --working-dir /home/dci-ansible-agent/.quickstart --playbook dci-trigger.yml 127.0.0.2
+    bash quickstart.sh --release newton --requirements /home/dci-ansible-agent/internal-requirements.txt --bootstrap --tags all --nodes /home/dci-ansible-agent/.quickstart/config/nodes/1ctlr_1comp.yml --working-dir /home/dci-ansible-agent/.quickstart --playbook -e @/etc/dci-ansible-agent/settings.yml dci-trigger.yml 127.0.0.2
 
 - include_tasks: /home/dci-ansible-agent/.quickstart/add_host.yml
